@@ -19,6 +19,7 @@ build: env
 up: env
 	$(COMPOSE) up -d --build
 	$(PYTHON) scripts/wait_for_stack.py
+	$(PYTHON) scripts/setup_elasticsearch.py
 	$(PYTHON) scripts/setup_kibana.py
 
 down:

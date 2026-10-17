@@ -181,10 +181,13 @@ services:
   # ------------------------------------------------------------------
   airflow-init:
     <<: *airflow-common
+    # Lancé en root pour donner le dossier temporaire à l'utilisateur airflow
+    user: "0:0"
     entrypoint: /bin/bash
     command:
       - -c
       - |
+        chown -R "$${AIRFLOW_UID}:0" /opt/scipulse/tmp &&
         airflow db migrate &&
         airflow users create --role Admin --username "$${AIRFLOW_ADMIN_USER}" \
           --password "$${AIRFLOW_ADMIN_PASSWORD}" --firstname SciPulse --lastname Admin \
