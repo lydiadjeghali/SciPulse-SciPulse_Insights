@@ -1,7 +1,8 @@
-"""DAGs Hacker News (Bronze).
+"""DAGs Hacker News.
 
-- hn_microbatch : appelle l'API toutes les 5 minutes.
-- hn_backfill   : récupère une fois l'historique des liens vers arxiv.org.
+- hn_microbatch : appelle l'API toutes les 5 minutes (Bronze).
+- hn_backfill   : récupère une fois l'historique des liens vers arxiv.org (Bronze).
+- hn_silver     : nettoie et valide toutes les données HN chaque heure (Silver).
 """
 from datetime import datetime, timedelta
 
@@ -21,6 +22,12 @@ def _backfill(**_):
     from scipulse.ingestion import hn
 
     return hn.backfill_arxiv_stories()
+
+
+def _clean_silver(**_):
+    from scipulse.cleaning import hn
+
+    return hn.run()
 
 
 with DAG(
@@ -48,3 +55,16 @@ with DAG(
 ) as dag_backfill:
     PythonOperator(task_id="backfill_arxiv_stories", python_callable=_backfill,
                    execution_timeout=timedelta(hours=1))
+
+with DAG(
+    dag_id="hn_silver",
+    description="Hacker News : hn-raw (Bronze) → hn-clean (Silver), chaque heure",
+    start_date=datetime(2026, 1, 1),
+    schedule="@hourly",
+    catchup=False,
+    max_active_runs=1,
+    default_args=default_args,
+    tags=["scipulse", "silver", "hn"],
+) as dag_silver:
+    PythonOperator(task_id="clean_silver", python_callable=_clean_silver,
+                   execution_timeout=timedelta(minutes=30))
