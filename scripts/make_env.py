@@ -1,7 +1,4 @@
-"""Crée le fichier .env à partir de .env.example.
-
-Si .env existe déjà, il est conservé.
-"""
+"""Crée le fichier .env à partir de .env.example. Si .env existe déjà, il est conservé."""
 import base64
 import os
 from pathlib import Path
@@ -10,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 example, target = ROOT / ".env.example", ROOT / ".env"
 
 if target.exists():
-    print(".env existe déjà — conservé.")
+    print(".env existe déjà")
 else:
     # Génère la clé de chiffrement d'Airflow
     fernet = base64.urlsafe_b64encode(os.urandom(32)).decode()
