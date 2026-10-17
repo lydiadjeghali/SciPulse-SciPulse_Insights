@@ -30,7 +30,18 @@ def import_ndjson(path: Path) -> dict:
         return json.loads(resp.read())
 
 
+def set_advanced_settings() -> None:
+    """Dates affichées en UTC (comme dans les données), quel que soit le fuseau du navigateur."""
+    req = urllib.request.Request(
+        f"{KIBANA}/api/kibana/settings", method="POST",
+        data=json.dumps({"changes": {"dateFormat:tz": "UTC"}}).encode(),
+        headers={"kbn-xsrf": "true", "Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req, timeout=30).read()
+
+
 def main() -> int:
+    set_advanced_settings()
     files = sorted((ROOT / "kibana").glob("*.ndjson"))
     if not files:
         print("Aucun objet Kibana à importer.")
