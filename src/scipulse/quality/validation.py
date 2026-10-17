@@ -41,7 +41,9 @@ def validate(df: pd.DataFrame, suite_name: str, run_name: str) -> dict:
     context = get_context()
     save_suites(context)
 
-    datasource = context.sources.add_or_update_pandas(DATASOURCE)
+    # Source réutilisée (et non recréée) : great_expectations.yml garde tous les assets
+    datasource = (context.get_datasource(DATASOURCE) if DATASOURCE in context.datasources
+                  else context.sources.add_pandas(DATASOURCE))
     asset = (datasource.get_asset(suite_name) if suite_name in datasource.get_asset_names()
              else datasource.add_dataframe_asset(suite_name))
     checkpoint = context.add_or_update_checkpoint(

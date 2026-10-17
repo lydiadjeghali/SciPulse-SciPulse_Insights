@@ -100,6 +100,9 @@ fluent_datasources:
   scipulse_silver:
     type: pandas
     assets:
+      hn_silver:
+        type: dataframe
+        batch_metadata: {}
       arxiv_silver:
         type: dataframe
         batch_metadata: {}

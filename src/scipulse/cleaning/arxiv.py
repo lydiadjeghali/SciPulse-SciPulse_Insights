@@ -15,9 +15,6 @@ avant d'être écrit (un paquet refusé arrête la tâche).
 """
 from __future__ import annotations
 
-import os
-import pickle
-import sys
 import time
 from itertools import islice
 from typing import Iterator
@@ -27,6 +24,7 @@ import pandas as pd
 from scipulse import config, monitoring, storage
 from scipulse.cleaning.common import clean_text, license_label, normalize_arxiv_id, normalize_doi
 from scipulse.ingestion.arxiv import latest_snapshot_key
+from scipulse.isolation import run_isolated
 from scipulse.quality import validation
 
 # 50 000 articles par paquet : environ 500 Mo de mémoire
@@ -127,35 +125,6 @@ def _process_chunk(part: int, records: list[dict], seen: set[str], prefix: str, 
     return {"stats": stats, "ids": ids}
 
 
-def _run_isolated(func, *args) -> dict:
-    """Exécute func dans un processus enfant : sa mémoire est libérée quand il se termine
-    (pandas et Great Expectations ne rendent pas toute la mémoire d'un paquet à l'autre).
-
-    os.fork est utilisé directement : Airflow lance les tâches dans un processus « démon »,
-    où le module multiprocessing interdit de créer des processus enfants.
-    """
-    sys.stdout.flush()                             # évite de dupliquer les affichages dans l'enfant
-    read_fd, write_fd = os.pipe()
-    pid = os.fork()
-    if pid == 0:                                   # processus enfant
-        os.close(read_fd)
-        try:
-            payload = ("ok", func(*args))
-        except Exception as exc:
-            payload = ("erreur", repr(exc))
-        with os.fdopen(write_fd, "wb") as pipe:
-            pickle.dump(payload, pipe)
-        os._exit(0)
-
-    os.close(write_fd)                             # processus parent
-    with os.fdopen(read_fd, "rb") as pipe:
-        status, result = pickle.load(pipe)
-    os.waitpid(pid, 0)
-    if status != "ok":
-        raise RuntimeError(result)
-    return result
-
-
 def run(sample_size: int = config.ARXIV_SAMPLE_SIZE, chunk_size: int = CHUNK_SIZE) -> dict:
     """Bronze → Silver pour ArXiv : nettoyage, validation Great Expectations, écriture Parquet."""
     start = time.time()
@@ -167,7 +136,7 @@ def run(sample_size: int = config.ARXIV_SAMPLE_SIZE, chunk_size: int = CHUNK_SIZ
     seen: set[str] = set()
     stats = {"lus": 0, "invalides": 0, "doublons": 0, "hors_perimetre": 0, "ecrits": 0, "paquets": 0}
     for part, records in enumerate(_chunks(key, chunk_size, sample_size)):
-        result = _run_isolated(_process_chunk, part, records, seen, prefix, snapshot)
+        result = run_isolated(_process_chunk, part, records, seen, prefix, snapshot)
         seen.update(result["ids"])
         for name, value in result["stats"].items():
             stats[name] += value
