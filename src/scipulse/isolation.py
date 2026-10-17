@@ -1,12 +1,3 @@
-"""Exécution d'une fonction dans un processus enfant (traitement par paquets).
-
-La mémoire utilisée par l'enfant est entièrement libérée quand il se termine :
-pandas, Great Expectations et le client Elasticsearch ne rendent pas toute leur
-mémoire d'un paquet à l'autre.
-
-os.fork est utilisé directement : Airflow lance les tâches dans un processus
-« démon », où le module multiprocessing interdit de créer des processus enfants.
-"""
 from __future__ import annotations
 
 import os

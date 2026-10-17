@@ -5,7 +5,11 @@ Le dump Kaggle est mis à jour chaque semaine, d'où une exécution hebdomadaire
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.datasets import Dataset
 from airflow.operators.python import PythonOperator
+
+# Mise à jour de la Silver ArXiv : déclenche le DAG arxiv_gold
+ARXIV_SILVER = Dataset("s3://arxiv-clean")
 
 default_args = {"owner": "scipulse", "retries": 2, "retry_delay": timedelta(minutes=5)}
 
@@ -42,6 +46,7 @@ with DAG(
         task_id="clean_silver",
         python_callable=_clean_silver,
         execution_timeout=timedelta(hours=3),
+        outlets=[ARXIV_SILVER],
     )
 
     ingest_bronze >> clean_silver

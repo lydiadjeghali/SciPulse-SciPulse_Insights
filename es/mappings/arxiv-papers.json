@@ -1,0 +1,58 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "filter": {
+        "english_stop": { "type": "stop", "stopwords": "_english_" },
+        "english_possessive": { "type": "stemmer", "language": "possessive_english" },
+        "english_light_stemmer": { "type": "stemmer", "language": "light_english" }
+      },
+      "analyzer": {
+        "scientific_english": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["english_possessive", "lowercase", "asciifolding", "english_stop", "english_light_stemmer"]
+        }
+      },
+      "normalizer": {
+        "lowercase_ascii": { "type": "custom", "filter": ["lowercase", "asciifolding"] }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "arxiv_id":          { "type": "keyword" },
+      "title": {
+        "type": "text", "analyzer": "scientific_english",
+        "fields": { "raw": { "type": "keyword", "ignore_above": 512 } }
+      },
+      "abstract":          { "type": "text", "analyzer": "scientific_english" },
+      "authors": {
+        "type": "text", "analyzer": "standard",
+        "fields": { "keyword": { "type": "keyword", "ignore_above": 256, "normalizer": "lowercase_ascii" } }
+      },
+      "n_authors":         { "type": "integer" },
+      "submitter":         { "type": "keyword", "ignore_above": 256 },
+      "categories":        { "type": "keyword" },
+      "primary_category":  { "type": "keyword" },
+      "primary_domain":    { "type": "keyword" },
+      "n_categories":      { "type": "integer" },
+      "doi":               { "type": "keyword" },
+      "has_doi":           { "type": "boolean" },
+      "journal_ref":       { "type": "text" },
+      "comments":          { "type": "text", "index": false },
+      "report_no":         { "type": "keyword", "ignore_above": 256 },
+      "license":           { "type": "keyword" },
+      "submitted_date":    { "type": "date", "format": "yyyy-MM-dd" },
+      "last_version_date": { "type": "date", "format": "yyyy-MM-dd" },
+      "update_date":       { "type": "date", "format": "yyyy-MM-dd" },
+      "published_year":    { "type": "short" },
+      "n_versions":        { "type": "short" },
+      "title_len":         { "type": "integer" },
+      "abstract_len":      { "type": "integer" },
+      "indexed_at":        { "type": "date" }
+    }
+  }
+}
