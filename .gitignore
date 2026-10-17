@@ -1,0 +1,28 @@
+# Secrets & environnement local
+.env
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Données locales (le data lake vit dans MinIO, jamais dans le repo)
+data/
+logs/
+*.zip
+*.parquet
+
+# Great Expectations : artefacts non versionnés
+great_expectations/uncommitted/
+
+# Airflow runtime
+airflow/logs/
+airflow/plugins/__pycache__/
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# IDE
+.vscode/
+.idea/
