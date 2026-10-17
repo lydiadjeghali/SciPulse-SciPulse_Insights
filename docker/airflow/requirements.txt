@@ -1,0 +1,15 @@
+﻿# Lancer des jobs Spark depuis Airflow
+apache-airflow-providers-apache-spark
+# Spark
+pyspark==3.5.4
+# Qualité des données
+great_expectations==0.18.21
+# MinIO et Elasticsearch
+boto3
+elasticsearch
+# Données tabulaires et Parquet
+pandas
+pyarrow
+requests
+# Tests
+pytest
