@@ -37,7 +37,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./src:/opt/scipulse/src
     - ./spark_jobs:/opt/scipulse/spark_jobs
-    - ./great_expectations:/opt/scipulse/great_expectations
+    - ./gx:/opt/scipulse/gx
     - ./es:/opt/scipulse/es
     - ./logs/pipeline:/opt/scipulse/logs
     - ./tests:/opt/scipulse/tests
@@ -217,8 +217,8 @@ services:
       <<: *airflow-deps
       airflow-init:
         condition: service_completed_successfully
-    # Le driver Spark tourne ici
-    mem_limit: 2g
+    # Le driver Spark et le nettoyage Silver tournent ici
+    mem_limit: 3g
     restart: unless-stopped
 
 volumes:

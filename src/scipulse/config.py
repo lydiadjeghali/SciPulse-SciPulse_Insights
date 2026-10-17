@@ -38,4 +38,4 @@ HN_ALGOLIA_API = "https://hn.algolia.com/api/v1"
 # Dossiers
 TMP_DIR = Path(os.getenv("SCIPULSE_TMP", HOME / "tmp"))
 LOG_DIR = Path(os.getenv("SCIPULSE_LOG_DIR", HOME / "logs"))
-GE_ROOT = HOME / "great_expectations"
+GE_ROOT = HOME / "gx"

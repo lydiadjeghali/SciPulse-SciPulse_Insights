@@ -1,0 +1,151 @@
+{
+  "data_asset_type": null,
+  "expectation_suite_name": "arxiv_silver",
+  "expectations": [
+    {
+      "expectation_type": "expect_table_columns_to_match_set",
+      "kwargs": {
+        "column_set": [
+          "arxiv_id",
+          "title",
+          "abstract",
+          "submitter",
+          "comments",
+          "journal_ref",
+          "report_no",
+          "authors",
+          "n_authors",
+          "categories",
+          "primary_category",
+          "primary_domain",
+          "n_categories",
+          "doi",
+          "license",
+          "submitted_date",
+          "last_version_date",
+          "n_versions",
+          "update_date",
+          "published_year",
+          "title_len",
+          "abstract_len"
+        ],
+        "exact_match": true
+      },
+      "meta": {
+        "notes": "Le sch\u00e9ma Silver est stable : Spark s'appuie dessus."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "arxiv_id"
+      },
+      "meta": {
+        "notes": "L'identifiant arXiv est la cl\u00e9 de jointure principale."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "arxiv_id"
+      },
+      "meta": {
+        "notes": "92 doublons trouv\u00e9s en Bronze : un article = une ligne."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "arxiv_id",
+        "regex": "^(?:\\d{4}\\.\\d{4,5}|[a-z\\-]+(?:\\.[A-Z]{2})?/\\d{7})$"
+      },
+      "meta": {
+        "notes": "Format nouveau (2101.00001) ou ancien (hep-th/9901001), sans num\u00e9ro de version."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "title"
+      },
+      "meta": {
+        "notes": "Un article sans titre est inutilisable."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "abstract"
+      },
+      "meta": {
+        "notes": "Le r\u00e9sum\u00e9 alimente la recherche plein texte et le TF-IDF."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "doi",
+        "regex": "^10\\.[^A-Z\\s]+$"
+      },
+      "meta": {
+        "notes": "DOI normalis\u00e9 : minuscules, sans pr\u00e9fixe https://doi.org/ (578 684 DOI en majuscules en Bronze)."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "primary_category",
+        "regex": "^[a-z\\-]+(\\.[A-Za-z\\-]+)?$"
+      },
+      "meta": {
+        "notes": "Cat\u00e9gorie principale au format arXiv (ex. cs.LG, hep-th)."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "published_year",
+        "max_value": 2026,
+        "min_value": 1986
+      },
+      "meta": {
+        "notes": "Les plus anciennes soumissions datent de 1986."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "n_authors",
+        "min_value": 1
+      },
+      "meta": {
+        "notes": "Tout article a au moins un auteur."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "license",
+        "regex": "^(inconnue|autre|arxiv-non-exclusive|cc0-\\d\\.\\d|cc-[a-z\\-]+-\\d\\.\\d)$"
+      },
+      "meta": {
+        "notes": "Licence encod\u00e9e en code court ; \u00ab inconnue \u00bb si absente (452 790 cas en Bronze)."
+      }
+    },
+    {
+      "expectation_type": "expect_column_pair_values_a_to_be_greater_than_b",
+      "kwargs": {
+        "column_A": "last_version_date",
+        "column_B": "submitted_date",
+        "or_equal": true
+      },
+      "meta": {
+        "notes": "La derni\u00e8re version ne peut pas pr\u00e9c\u00e9der la premi\u00e8re."
+      }
+    }
+  ],
+  "ge_cloud_id": null,
+  "meta": {
+    "great_expectations_version": "0.18.21"
+  }
+}

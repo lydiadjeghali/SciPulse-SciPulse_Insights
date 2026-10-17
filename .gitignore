@@ -12,7 +12,7 @@ logs/
 *.parquet
 
 # Great Expectations : artefacts non versionnés
-great_expectations/uncommitted/
+gx/uncommitted/
 
 # Airflow runtime
 airflow/logs/
