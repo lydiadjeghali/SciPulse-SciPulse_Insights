@@ -1,9 +1,14 @@
-"""Bronze ArXiv : télécharge le dump Kaggle et l'écrit tel quel dans MinIO."""
+"""Bronze ArXiv : télécharge le dump Kaggle et l'écrit tel quel dans MinIO.
+
+Le snapshot porte la date de publication du fichier Kaggle. Si le fichier n'a pas
+changé depuis la dernière ingestion (même ETag), il n'est pas re-téléchargé.
+"""
 from __future__ import annotations
 
+import json
 import time
 import zipfile
-from datetime import date
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import requests
@@ -13,6 +18,7 @@ from scipulse import config, monitoring, storage
 
 # Fichier contenu dans le zip Kaggle (un article JSON par ligne)
 DUMP_MEMBER = "arxiv-metadata-oai-snapshot.json"
+STATE_KEY = "_state/last_ingest.json"
 
 
 class _LineCountingReader:
@@ -37,6 +43,22 @@ class _LineCountingReader:
         return chunk
 
 
+def source_version(url: str = config.ARXIV_DUMP_URL) -> dict:
+    """Version du fichier Kaggle (ETag et date), lue sans le télécharger (1 octet demandé)."""
+    with requests.get(url, headers={"Range": "bytes=0-0"}, timeout=60) as resp:
+        resp.raise_for_status()
+        published = parsedate_to_datetime(resp.headers["Last-Modified"])
+        return {"etag": resp.headers.get("ETag", "").strip('"'), "published": published.date().isoformat()}
+
+
+def _read_state() -> dict:
+    try:
+        body = storage.s3_client().get_object(Bucket=config.BRONZE["arxiv"], Key=STATE_KEY)["Body"]
+        return json.loads(body.read())
+    except Exception:
+        return {}
+
+
 def download_dump(dest: Path, url: str = config.ARXIV_DUMP_URL) -> Path:
     """Télécharge le zip Kaggle (ignoré s'il est déjà complet sur le disque)."""
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -53,13 +75,22 @@ def download_dump(dest: Path, url: str = config.ARXIV_DUMP_URL) -> Path:
     return dest
 
 
-def ingest(snapshot: str | None = None, sample_size: int = config.ARXIV_SAMPLE_SIZE,
-           keep_zip: bool = False) -> dict:
-    """Envoie le dump dans arxiv-raw/snapshot=<date>/ sans le modifier."""
+def ingest(sample_size: int = config.ARXIV_SAMPLE_SIZE, keep_zip: bool = False) -> dict:
+    """Envoie le dump dans arxiv-raw/snapshot=<date du fichier>/ sans le modifier."""
     start = time.time()
-    snapshot = snapshot or date.today().isoformat()
-    zip_path = download_dump(config.TMP_DIR / "arxiv.zip")
+    version = source_version()
+    snapshot = version["published"]
     key = f"snapshot={snapshot}/{DUMP_MEMBER}"
+
+    # Fichier source inchangé depuis la dernière ingestion : rien à faire
+    state = _read_state()
+    if state.get("etag") == version["etag"] and storage.object_exists(config.BRONZE["arxiv"], state["key"]):
+        print(f"Dump Kaggle inchangé (publié le {snapshot}) : déjà présent dans {state['key']}")
+        monitoring.emit("ingestion", "bronze", "arxiv", status="skipped", records=0,
+                        duration_s=round(time.time() - start, 1), snapshot=snapshot)
+        return {"key": state["key"], "records": state["records"], "skipped": True}
+
+    zip_path = download_dump(config.TMP_DIR / "arxiv.zip")
 
     # Le fichier est lu dans le zip et envoyé directement vers MinIO
     with zipfile.ZipFile(zip_path) as zf, zf.open(DUMP_MEMBER) as member:
@@ -71,6 +102,12 @@ def ingest(snapshot: str | None = None, sample_size: int = config.ARXIV_SAMPLE_S
     if not keep_zip:
         zip_path.unlink(missing_ok=True)
 
+    # Mémorise la version ingérée (pas d'état en mode échantillon)
+    if not sample_size:
+        storage.s3_client().put_object(
+            Bucket=config.BRONZE["arxiv"], Key=STATE_KEY,
+            Body=json.dumps({**version, "key": key, "records": reader.lines}).encode(),
+        )
     monitoring.emit("ingestion", "bronze", "arxiv", records=reader.lines, bytes=reader.bytes,
                     duration_s=round(time.time() - start, 1), snapshot=snapshot)
     return {"key": key, "records": reader.lines, "bytes": reader.bytes}

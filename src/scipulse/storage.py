@@ -49,12 +49,25 @@ def put_jsonl(bucket: str, key: str, records: Iterable[dict]) -> int:
     return len(lines)
 
 
-def iter_jsonl(bucket: str, key: str) -> Iterator[dict]:
-    """Lit un fichier JSON Lines ligne par ligne."""
-    body = s3_client().get_object(Bucket=bucket, Key=key)["Body"]
-    for line in body.iter_lines(chunk_size=1 << 20):
-        if line.strip():
-            yield json.loads(line)
+def iter_jsonl(bucket: str, key: str, block_size: int = 64 << 20) -> Iterator[dict]:
+    """Lit un fichier JSON Lines ligne par ligne.
+
+    Le fichier est lu par tranches (requêtes Range) : aucune connexion ne reste ouverte
+    pendant le traitement des lignes (MinIO coupait le flux du dump de 5,6 Go).
+    """
+    client = s3_client()
+    size = client.head_object(Bucket=bucket, Key=key)["ContentLength"]
+    rest = b""
+    for start in range(0, size, block_size):
+        end = min(start + block_size, size) - 1
+        block = client.get_object(Bucket=bucket, Key=key, Range=f"bytes={start}-{end}")["Body"].read()
+        lines = (rest + block).split(b"\n")
+        rest = lines.pop()                      # dernière ligne peut-être incomplète
+        for line in lines:
+            if line.strip():
+                yield json.loads(line)
+    if rest.strip():
+        yield json.loads(rest)
 
 
 def read_jsonl_prefix(bucket: str, prefix: str = "") -> pd.DataFrame:
