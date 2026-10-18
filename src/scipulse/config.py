@@ -32,6 +32,8 @@ ARXIV_SAMPLE_SIZE = int(os.getenv("ARXIV_SAMPLE_SIZE", "0") or 0)
 # Sources externes
 OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "")
 OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", "")
+# Nombre total d'articles dont on récupère les citations (quota API et espace disque)
+CITATIONS_MAX_ARTICLES = int(os.getenv("CITATIONS_MAX_ARTICLES", "400000") or 400000)
 HN_API = "https://hacker-news.firebaseio.com/v0"
 HN_ALGOLIA_API = "https://hn.algolia.com/api/v1"
 
