@@ -106,6 +106,9 @@ fluent_datasources:
       arxiv_silver:
         type: dataframe
         batch_metadata: {}
+      citations_silver:
+        type: dataframe
+        batch_metadata: {}
 notebooks:
 include_rendered_content:
   globally: false

@@ -5,7 +5,11 @@ chaque passage reprend là où le précédent s'est arrêté.
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.datasets import Dataset
 from airflow.operators.python import PythonOperator
+
+# Nouvelles données de citations : déclenche le DAG citations_silver
+CITATIONS_BRONZE = Dataset("s3://citations-raw")
 
 default_args = {"owner": "scipulse", "retries": 1, "retry_delay": timedelta(minutes=10)}
 
@@ -27,4 +31,4 @@ with DAG(
     tags=["scipulse", "bronze", "citations", "module2"],
 ) as dag:
     PythonOperator(task_id="ingest_openalex", python_callable=_ingest,
-                   execution_timeout=timedelta(hours=4))
+                   execution_timeout=timedelta(hours=4), outlets=[CITATIONS_BRONZE])

@@ -20,6 +20,12 @@ HN_COLUMNS = [
     "story_kind", "arxiv_id", "has_arxiv_link", "source", "feed", "observed_at",
 ]
 
+CITATIONS_COLUMNS = [
+    "arxiv_id", "openalex_id", "doi", "title", "publication_year", "publication_date", "work_type",
+    "cited_by_count", "counts_by_year", "topic", "subfield", "field", "domain",
+    "referenced_works", "referenced_works_count",
+]
+
 # (type d'expectation, paramètres, note)
 SUITES = {
     "arxiv_silver": [
@@ -78,5 +84,21 @@ SUITES = {
          "URL absolue (null autorisé pour les Ask HN)."),
         ("expect_column_values_to_match_regex", {"column": "arxiv_id", "regex": ARXIV_ID_REGEX},
          "Identifiant arXiv extrait de l'URL, même format que dans arxiv-clean."),
+    ],
+    "citations_silver": [
+        ("expect_table_columns_to_match_set", {"column_set": CITATIONS_COLUMNS, "exact_match": True},
+         "Schéma stable pour la jointure Spark."),
+        ("expect_column_values_to_not_be_null", {"column": "arxiv_id"},
+         "L'identifiant arXiv est la clé de jointure avec arxiv-clean et hn-clean."),
+        ("expect_column_values_to_be_unique", {"column": "arxiv_id"},
+         "Un article = une ligne (doublons OpenAlex retirés)."),
+        ("expect_column_values_to_match_regex", {"column": "arxiv_id", "regex": ARXIV_ID_REGEX},
+         "Même format d'identifiant que dans arxiv-clean, sans numéro de version."),
+        ("expect_column_values_to_match_regex", {"column": "doi", "regex": r"^10\.[^A-Z\s]+$"},
+         "DOI normalisé : minuscules, sans préfixe https://doi.org/ (même règle que pour ArXiv)."),
+        ("expect_column_values_to_be_between", {"column": "cited_by_count", "min_value": 0},
+         "Un nombre de citations ne peut pas être négatif."),
+        ("expect_column_values_to_match_regex", {"column": "openalex_id", "regex": r"^W\d+$"},
+         "Identifiant OpenAlex court (W suivi de chiffres)."),
     ],
 }
