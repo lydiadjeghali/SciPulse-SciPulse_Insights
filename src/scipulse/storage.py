@@ -77,7 +77,9 @@ def read_jsonl_prefix(bucket: str, prefix: str = "") -> pd.DataFrame:
 
 def put_parquet(bucket: str, key: str, df: pd.DataFrame) -> None:
     buf = io.BytesIO()
-    df.to_parquet(buf, index=False, engine="pyarrow", compression="snappy")
+    # Dates en microsecondes : format lisible directement par Spark
+    df.to_parquet(buf, index=False, engine="pyarrow", compression="snappy",
+                  coerce_timestamps="us", allow_truncated_timestamps=True)
     s3_client().put_object(Bucket=bucket, Key=key, Body=buf.getvalue())
 
 
