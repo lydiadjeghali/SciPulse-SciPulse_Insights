@@ -12,6 +12,8 @@ MINIO_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "scipulse-minio-secret")
 # Buckets par couche
 BRONZE = {"arxiv": "arxiv-raw", "hn": "hn-raw", "citations": "citations-raw"}
 SILVER = {"arxiv": "arxiv-clean", "hn": "hn-clean", "citations": "citations-clean"}
+# Résultat Spark avant publication dans Elasticsearch (intermédiaire technique, non exposé)
+GOLD_STAGING = "gold-staging"
 
 # Elasticsearch
 ES_HOST = os.getenv("ES_HOST", "http://localhost:9200")

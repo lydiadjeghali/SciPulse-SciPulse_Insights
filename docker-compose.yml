@@ -77,7 +77,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       # Buckets créés au démarrage
-      MINIO_DEFAULT_BUCKETS: arxiv-raw,hn-raw,citations-raw,arxiv-clean,hn-clean,citations-clean
+      MINIO_DEFAULT_BUCKETS: arxiv-raw,hn-raw,citations-raw,arxiv-clean,hn-clean,citations-clean,gold-staging
       MINIO_CONSOLE_PORT_NUMBER: 9001
     ports:
       - "9000:9000"   # API S3

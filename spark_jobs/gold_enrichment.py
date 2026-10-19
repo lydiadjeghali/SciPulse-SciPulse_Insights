@@ -1,9 +1,11 @@
-"""Job Spark Gold : indicateurs par catégorie, TF-IDF et score d'impact composite.
+"""Job Spark Gold : indicateurs par catégorie, TF-IDF, score d'impact composite
+et écriture dans l'index Elasticsearch arxiv-papers-enriched.
 
     spark-submit --master spark://spark-master:7077 spark_jobs/gold_enrichment.py
 
 Périmètre du score : articles avec citations OpenAlex et/ou passés sur Hacker News.
-Résultats : logs/spark/gold_report.json.
+Le résultat est d'abord écrit en Parquet (bucket technique gold-staging), puis publié dans l'index arxiv-papers-enriched
+Résultats : index arxiv-papers-enriched et logs/spark/gold_report.json.
 """
 import argparse
 import json
@@ -14,7 +16,7 @@ from pyspark.sql import functions as F
 
 from scipulse import config, monitoring
 from scipulse.ingestion.arxiv import latest_snapshot_key
-from scipulse.spark import analytics, joins, sources
+from scipulse.spark import analytics, gold, joins, sources
 from scipulse.spark.session import get_spark
 
 ARXIV_COLUMNS = ["arxiv_id", "title", "abstract", "authors", "categories", "primary_category", "primary_domain",
@@ -25,7 +27,21 @@ def rows(df, n=10):
     return [r.asDict() for r in df.limit(n).collect()]
 
 
-def main(sample: float = 0.0) -> dict:
+STAGING_PATH = f"s3a://{config.GOLD_STAGING}/arxiv-papers-enriched/"
+
+
+def publish(spark) -> dict:
+    """Publie dans Elasticsearch le dernier résultat calculé (sans recalcul)."""
+    start = time.time()
+    scored = spark.read.parquet(STAGING_PATH)
+    total = gold.write_gold(scored)
+    result = {"documents_index": total, "duree_ecriture_es_s": round(time.time() - start, 1)}
+    monitoring.emit("indexing", "gold", "enriched", records=total, index_total=total,
+                    duration_s=result["duree_ecriture_es_s"])
+    return result
+
+
+def main(sample: float = 0.0, write_es: bool = True) -> dict:
     start = time.time()
     spark = get_spark("scipulse-gold")
     snapshot_date = latest_snapshot_key().split("/")[0].split("=")[1]
@@ -42,15 +58,17 @@ def main(sample: float = 0.0) -> dict:
     scope = joins.join_sources(arxiv, citations, hn_agg, "broadcast").where("has_citations OR on_hn")
     if sample:
         scope = scope.sample(fraction=sample, seed=42)
-    scope = analytics.citation_velocity(scope, last_complete_year).persist()
+    # Point de reprise sur disque : la jointure et la lecture des 3 M d'articles ne sont faites qu'une fois
+    scope = analytics.citation_velocity(scope, last_complete_year).checkpoint()
     velocity_by_cat = analytics.citation_velocity_by_category(scope.where("has_citations"))
 
     #  TF-IDF des résumés et mots-clés ; point de reprise sur disque
     enriched, vocab_size = analytics.tfidf(scope)
     enriched = enriched.drop("tfidf", "abstract").checkpoint()
 
-    # Score d'impact composite
-    scored = analytics.impact_score(enriched, snapshot_date).checkpoint()
+    # Score d'impact composite, enregistré en Parquet avant publication
+    analytics.impact_score(enriched, snapshot_date).write.mode("overwrite").parquet(STAGING_PATH)
+    scored = spark.read.parquet(STAGING_PATH)
 
     report = {
         "snapshot": snapshot_date, "annees_velocite": [last_complete_year - 1, last_complete_year],
@@ -68,6 +86,9 @@ def main(sample: float = 0.0) -> dict:
             (F.col("annee") == last_complete_year) & (F.col("citations_recues") >= 1000))
             .orderBy(F.desc("croissance_citations"))),
     }
+    # Couche Gold : publication dans Elasticsearch (elasticsearch-hadoop)
+    if write_es:
+        report.update(publish(spark))
     report["duree_totale_s"] = round(time.time() - start, 1)
     out = config.LOG_DIR / "spark"
     out.mkdir(parents=True, exist_ok=True)
@@ -83,4 +104,12 @@ def main(sample: float = 0.0) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample", type=float, default=0.0, help="fraction du périmètre pour un test")
-    main(parser.parse_args().sample)
+    parser.add_argument("--no-es", action="store_true", help="ne pas écrire dans Elasticsearch")
+    parser.add_argument("--publish-only", action="store_true", help="publier le dernier résultat sans recalcul")
+    args = parser.parse_args()
+    if args.publish_only:
+        session = get_spark("scipulse-gold-publication")
+        print(publish(session))
+        session.stop()
+    else:
+        main(args.sample, write_es=not args.no_es)

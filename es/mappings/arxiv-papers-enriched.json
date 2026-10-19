@@ -1,0 +1,77 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "filter": {
+        "english_stop": { "type": "stop", "stopwords": "_english_" },
+        "english_possessive": { "type": "stemmer", "language": "possessive_english" },
+        "english_light_stemmer": { "type": "stemmer", "language": "light_english" }
+      },
+      "analyzer": {
+        "scientific_english": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["english_possessive", "lowercase", "asciifolding", "english_stop", "english_light_stemmer"]
+        }
+      },
+      "normalizer": {
+        "lowercase_ascii": { "type": "custom", "filter": ["lowercase", "asciifolding"] }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "arxiv_id":               { "type": "keyword" },
+      "title": {
+        "type": "text", "analyzer": "scientific_english",
+        "fields": { "raw": { "type": "keyword", "ignore_above": 512 } }
+      },
+      "authors": {
+        "type": "text", "analyzer": "standard",
+        "fields": { "keyword": { "type": "keyword", "ignore_above": 256, "normalizer": "lowercase_ascii" } }
+      },
+      "categories":             { "type": "keyword" },
+      "primary_category":       { "type": "keyword" },
+      "primary_domain":         { "type": "keyword" },
+      "doi":                    { "type": "keyword" },
+      "submitted_date":         { "type": "date" },
+      "published_year":         { "type": "short" },
+
+      "openalex_id":            { "type": "keyword" },
+      "cited_by_count":         { "type": "integer" },
+      "counts_by_year": {
+        "properties": {
+          "year":               { "type": "short" },
+          "cited_by_count":     { "type": "integer" }
+        }
+      },
+      "openalex_year":          { "type": "short" },
+      "topic":                  { "type": "keyword" },
+      "subfield":               { "type": "keyword" },
+      "field":                  { "type": "keyword" },
+      "domain":                 { "type": "keyword" },
+      "referenced_works_count": { "type": "integer" },
+      "velocite_citations":     { "type": "float" },
+
+      "hn_stories":             { "type": "integer" },
+      "hn_score_total":         { "type": "integer" },
+      "hn_score_max":           { "type": "integer" },
+      "hn_comments_total":      { "type": "integer" },
+      "hn_first_seen":          { "type": "date" },
+      "hn_last_seen":           { "type": "date" },
+
+      "has_citations":          { "type": "boolean" },
+      "on_hn":                  { "type": "boolean" },
+      "mots_cles":              { "type": "keyword" },
+
+      "score_citations":        { "type": "float" },
+      "score_velocite":         { "type": "float" },
+      "score_hn":               { "type": "float" },
+      "score_recence":          { "type": "float" },
+      "impact_score":           { "type": "float" },
+      "indexed_at":             { "type": "date" }
+    }
+  }
+}

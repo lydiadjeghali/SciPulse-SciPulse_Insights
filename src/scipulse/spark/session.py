@@ -13,10 +13,7 @@ def get_spark(app_name: str = "scipulse") -> SparkSession:
     builder = (
         SparkSession.builder.appName(app_name)
         .master(os.getenv("SPARK_MASTER_URL", "spark://spark-master:7077"))
-        # Mémoire calibrée pour le worker (1,5 Go, 2 cœurs) et le scheduler Airflow
-        .config("spark.executor.memory", "1g")
-        .config("spark.executor.cores", "2")
-        .config("spark.driver.memory", "1536m")
+        # Mémoire du driver et des exécuteurs : fixée au lancement (spark-submit ou DAG spark_gold)
         .config("spark.sql.shuffle.partitions", "16")
         # Délais longs : le driver tourne dans le scheduler Airflow, parfois très chargé
         .config("spark.network.timeout", "600s")
