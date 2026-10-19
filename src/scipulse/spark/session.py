@@ -16,9 +16,12 @@ def get_spark(app_name: str = "scipulse") -> SparkSession:
         # Mémoire calibrée pour le worker (1,5 Go, 2 cœurs) et le scheduler Airflow
         .config("spark.executor.memory", "1g")
         .config("spark.executor.cores", "2")
-        .config("spark.driver.memory", "1g")
+        .config("spark.driver.memory", "1536m")
         .config("spark.sql.shuffle.partitions", "16")
-        # Accès à MinIO (compatible S3)
+        # Délais longs : le driver tourne dans le scheduler Airflow, parfois très chargé
+        .config("spark.network.timeout", "600s")
+        .config("spark.executor.heartbeatInterval", "60s")
+        # Accès à MinIO 
         .config("spark.hadoop.fs.s3a.endpoint", config.MINIO_ENDPOINT)
         .config("spark.hadoop.fs.s3a.access.key", config.MINIO_USER)
         .config("spark.hadoop.fs.s3a.secret.key", config.MINIO_PASSWORD)
@@ -28,4 +31,7 @@ def get_spark(app_name: str = "scipulse") -> SparkSession:
         # Dates écrites par pandas en nanosecondes : lues comme entiers, converties au chargement
         .config("spark.sql.legacy.parquet.nanosAsLong", "true")
     )
-    return builder.getOrCreate()
+    spark = builder.getOrCreate()
+    # Points de reprise dans le volume partagé par le driver et le worker
+    spark.sparkContext.setCheckpointDir("file:///opt/scipulse/tmp/spark-checkpoints")
+    return spark
