@@ -14,6 +14,7 @@ OUT = ROOT / "kibana" / "scipulse.ndjson"
 
 DV_ARXIV = "dv-arxiv-papers"
 DV_MONITORING = "dv-scipulse-monitoring"
+DV_ENRICHED = "dv-arxiv-papers-enriched"
 LAYER = "layer1"
 
 
@@ -51,6 +52,16 @@ def terms(field, label, size, order_col, other=False):
                        "parentFormat": {"id": "terms"}}}
 
 
+def terms_by_count(field, label, size):
+    """Regroupement trié par nombre de documents (catégories les plus représentées)."""
+    col = terms(field, label, size, None)
+    col["params"]["orderBy"] = {"type": "custom"}
+    col["params"]["orderAgg"] = {"label": "Nombre", "dataType": "number", "operationType": "count",
+                                 "isBucketed": False, "scale": "ratio", "sourceField": "___records___",
+                                 "params": {"emptyAsNull": True}}
+    return col
+
+
 def date_hist(field, label, interval):
     return {"label": label, "dataType": "date", "operationType": "date_histogram", "isBucketed": True,
             "scale": "interval", "sourceField": field, "customLabel": True,
@@ -59,6 +70,7 @@ def date_hist(field, label, interval):
 
 PERCENT = {"id": "percent", "params": {"decimals": 1}}
 NUMBER = {"id": "number", "params": {"decimals": 0}}
+DECIMAL = {"id": "number", "params": {"decimals": 1}}
 
 
 # -------------------------------------------------------------- objets Lens
@@ -105,8 +117,11 @@ def xy_vis(obj_id, title, dv, x_col, y_col, series="bar_stacked", split_col=None
     return lens(obj_id, title, dv, columns, vis, "lnsXY", query)
 
 
-def table_vis(obj_id, title, dv, columns, query=""):
-    vis = {"layerId": LAYER, "layerType": "data", "columns": [{"columnId": c} for c in columns]}
+def table_vis(obj_id, title, dv, columns, query="", widths=None):
+    """widths : largeur en pixels de certaines colonnes (ex. titres d'articles)."""
+    widths = widths or {}
+    vis = {"layerId": LAYER, "layerType": "data",
+           "columns": [{"columnId": c, **({"width": widths[c]} if c in widths else {})} for c in columns]}
     return lens(obj_id, title, dv, columns, vis, "lnsDatatable", query)
 
 
@@ -287,13 +302,89 @@ def exploration_objects():
     return list(v.values()) + [search, board]
 
 
+def article_table(obj_id, title, dv, measures, query=""):
+    """Tableau d'articles (un par ligne) ; measures : colonnes chiffrées, la première sert au tri."""
+    columns = {"id": terms("arxiv_id", "arxiv_id", 20, "m0"),
+               "ti": last_value("title.raw", "submitted_date", "Titre"),
+               "c": last_value("primary_category", "submitted_date", "Catégorie")}
+    columns.update({f"m{i}": col for i, col in enumerate(measures)})
+    return table_vis(obj_id, title, dv, columns, query, widths={"ti": 560})
+
+
+def insights_objects():
+    dv = DV_ENRICHED
+    v = {
+        "total": metric_vis("ins-total", "Articles notés", dv, count("Articles")),
+        "score": metric_vis("ins-score", "Score d'impact moyen (sur 100)", dv,
+                            metric("average", "impact_score", "Score moyen", DECIMAL)),
+        "cited": metric_vis("ins-cited", "Citations OpenAlex reçues", dv,
+                            metric("sum", "cited_by_count", "Citations", NUMBER)),
+        "hn": metric_vis("ins-hn", "Articles passés sur Hacker News", dv, count("Articles sur HN"), "on_hn : true"),
+        "top": article_table("ins-top", "Articles au plus fort score d'impact", dv, [
+            metric("max", "impact_score", "Score d'impact", DECIMAL),
+            metric("max", "cited_by_count", "Citations", NUMBER),
+            metric("max", "hn_score_total", "Points HN", NUMBER)]),
+        "score_domain": xy_vis("ins-score-domain", "Score d'impact moyen par domaine", dv,
+                               terms("primary_domain", "Domaine", 15, "y"),
+                               metric("average", "impact_score", "Score moyen", DECIMAL),
+                               "bar_horizontal", legend=False),
+        "citations_year": xy_vis("ins-citations-year", "Citations reçues selon l'année de publication", dv,
+                                 date_hist("submitted_date", "Année", "1y"),
+                                 metric("sum", "cited_by_count", "Citations", NUMBER), "bar", legend=False),
+        "velocity": xy_vis("ins-velocity", "Vélocité de citation moyenne des 15 catégories les plus publiées", dv,
+                           terms_by_count("primary_category", "Catégorie", 15),
+                           metric("average", "velocite_citations", "Citations par an (2 dernières années)",
+                                  DECIMAL), "bar_horizontal", legend=False),
+        # Cas d'usage 1 : reconnus par la recherche, ignorés par la communauté tech
+        "cited_not_hn": article_table("ins-cited-not-hn", "Très cités, jamais mentionnés sur Hacker News", dv, [
+            metric("max", "cited_by_count", "Citations", NUMBER),
+            metric("max", "velocite_citations", "Citations par an", DECIMAL),
+            metric("max", "impact_score", "Score d'impact", DECIMAL)], "on_hn : false"),
+        # Cas d'usage 2 : succès sur HN, citations dans le quart inférieur de leur cohorte (domaine, année)
+        "viral_low_cited": article_table(
+            "ins-viral-low-cited", "Viraux sur Hacker News mais peu cités (quart inférieur de leur cohorte)", dv, [
+                metric("max", "hn_score_total", "Points HN", NUMBER),
+                metric("max", "cited_by_count", "Citations", NUMBER),
+                metric("max", "impact_score", "Score d'impact", DECIMAL)],
+            "on_hn : true and score_citations < 0.25"),
+        # Cas d'usage 3 : croissance des publications ET des citations (dernière année complète)
+        "growth": table_vis("ins-growth", "Catégories en croissance : publications et citations (dernière année)", dv, {
+            "c": terms("primary_category", "Catégorie", 20, "gc"),
+            "p": metric("max", "publications_categorie", "Publications", NUMBER),
+            "gp": metric("max", "croissance_publications_categorie", "Croissance publications", PERCENT),
+            "n": metric("max", "citations_categorie", "Citations reçues", NUMBER),
+            "gc": metric("max", "croissance_citations_categorie", "Croissance citations", PERCENT),
+        }, "croissance_publications_categorie > 0 and croissance_citations_categorie > 0 "
+           "and publications_categorie >= 500"),
+    }
+    controls = options_controls(dv, [("primary_domain", "Domaine"), ("primary_category", "Catégorie"),
+                                     ("on_hn", "Passé sur HN")])
+    board = dashboard(
+        "dash-insights", "SciPulse Insights — Score d'impact et citations",
+        "Couche Gold complète (arxiv-papers-enriched) : score d'impact composite, indicateurs de citation "
+        "OpenAlex, signal Hacker News et cas d'usage analytiques.",
+        [(v["total"], 0, 0, 12, 7), (v["score"], 12, 0, 12, 7), (v["cited"], 24, 0, 12, 7),
+         (v["hn"], 36, 0, 12, 7),
+         (v["top"], 0, 7, 48, 15),
+         (v["score_domain"], 0, 22, 16, 14), (v["citations_year"], 16, 22, 16, 14),
+         (v["velocity"], 32, 22, 16, 14),
+         (v["cited_not_hn"], 0, 36, 48, 15),
+         (v["viral_low_cited"], 0, 51, 48, 15),
+         (v["growth"], 0, 66, 48, 15)],
+        "1986-01-01T00:00:00.000Z", "now", controls=controls)
+    return list(v.values()) + [board]
+
+
 def main():
     objects = [
         data_view(DV_ARXIV, "arxiv-papers", "ArXiv — articles (Gold)", "submitted_date",
                   day_fields=("submitted_date", "last_version_date", "update_date")),
         data_view(DV_MONITORING, "scipulse-monitoring", "SciPulse — monitoring du pipeline", "@timestamp"),
+        data_view(DV_ENRICHED, "arxiv-papers-enriched", "ArXiv enrichi — score d'impact (Gold)", "submitted_date",
+                  day_fields=("submitted_date",)),
         *monitoring_objects(),
         *exploration_objects(),
+        *insights_objects(),
     ]
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text("\n".join(json.dumps(o, ensure_ascii=False) for o in objects) + "\n", encoding="utf-8")

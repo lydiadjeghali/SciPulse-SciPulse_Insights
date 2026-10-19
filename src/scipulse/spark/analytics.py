@@ -44,6 +44,17 @@ def citation_velocity_by_category(df: DataFrame) -> DataFrame:
                                F.round((F.col("citations_recues") - previous) / previous, 4))
 
 
+
+def category_indicators(growth: DataFrame, velocity_by_cat: DataFrame, year: int) -> DataFrame:
+    """Indicateurs de la catégorie pour une année, à ajouter à chaque article de la catégorie."""
+    publications = growth.where(F.col("published_year") == year).select(
+        "primary_category", F.col("publications").alias("publications_categorie"),
+        F.col("croissance_publications").alias("croissance_publications_categorie"))
+    citations = velocity_by_cat.where(F.col("annee") == year).select(
+        "primary_category", F.col("citations_recues").alias("citations_categorie"),
+        F.col("croissance_citations").alias("croissance_citations_categorie"))
+    return publications.join(citations, "primary_category", "full")
+
 # ------------------------------------------------------------- TF-IDF
 def tfidf(df: DataFrame, vocab_size: int = 50_000, min_df: int = 5, top_k: int = 5) -> tuple[DataFrame, int]:
     """TF-IDF des résumés (Spark MLlib). Renvoie les données avec les mots-clés de chaque article

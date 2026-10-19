@@ -55,6 +55,11 @@
       "referenced_works_count": { "type": "integer" },
       "velocite_citations":     { "type": "float" },
 
+      "publications_categorie":            { "type": "integer" },
+      "croissance_publications_categorie": { "type": "float" },
+      "citations_categorie":               { "type": "long" },
+      "croissance_citations_categorie":    { "type": "float" },
+
       "hn_stories":             { "type": "integer" },
       "hn_score_total":         { "type": "integer" },
       "hn_score_max":           { "type": "integer" },
