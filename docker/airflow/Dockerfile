@@ -27,5 +27,11 @@ RUN cd "${SPARK_HOME}/jars" \
  && curl -sSfLO https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar \
  && curl -sSfLO https://repo1.maven.org/maven2/org/elasticsearch/elasticsearch-spark-30_2.12/8.15.3/elasticsearch-spark-30_2.12-8.15.3.jar
 
+# GraphFrames (option B) : graphe de citations et PageRank.
+# Le jar contient aussi le module Python graphframes, ajouté au PYTHONPATH.
+ARG GRAPHFRAMES_JAR=graphframes-0.8.3-spark3.5-s_2.12.jar
+RUN cd "${SPARK_HOME}/jars" \
+ && curl -sSfLO https://repos.spark-packages.org/graphframes/graphframes/0.8.3-spark3.5-s_2.12/${GRAPHFRAMES_JAR}
+
 # Code du projet
-ENV PYTHONPATH=/opt/scipulse/src
+ENV PYTHONPATH=/opt/scipulse/src:${SPARK_HOME}/jars/${GRAPHFRAMES_JAR}

@@ -1,5 +1,5 @@
-"""Job Spark Gold : indicateurs par catégorie, TF-IDF, score d'impact composite
-et écriture dans l'index Elasticsearch arxiv-papers-enriched.
+"""Job Spark Gold : indicateurs par catégorie, graphe de citations (PageRank), TF-IDF,
+score d'impact composite et écriture dans l'index Elasticsearch arxiv-papers-enriched.
 
     spark-submit --master spark://spark-master:7077 spark_jobs/gold_enrichment.py
 
@@ -16,7 +16,7 @@ from pyspark.sql import functions as F
 
 from scipulse import config, monitoring
 from scipulse.ingestion.arxiv import latest_snapshot_key
-from scipulse.spark import analytics, gold, joins, sources
+from scipulse.spark import analytics, gold, graph, joins, sources
 from scipulse.spark.session import get_spark
 
 ARXIV_COLUMNS = ["arxiv_id", "title", "abstract", "authors", "categories", "primary_category", "primary_domain",
@@ -71,6 +71,12 @@ def main(sample: float = 0.0, write_es: bool = True) -> dict:
     scope = analytics.citation_velocity(scope, year).checkpoint()
     velocity_by_cat = analytics.citation_velocity_by_category(scope.where("has_citations"))
 
+    # Graphe de citations (GraphFrames) : PageRank, composantes connexes, communautés ; point de reprise
+    citation_graph = graph.citation_graph(citations, scope)
+    metrics = graph.graph_metrics(citation_graph).checkpoint()
+    graph_report = graph.graph_summary(citation_graph, metrics, scope)
+    scope = scope.join(metrics, "arxiv_id", "left").checkpoint()
+
     #  TF-IDF des résumés et mots-clés ; point de reprise sur disque
     enriched, vocab_size = analytics.tfidf(scope)
     enriched = enriched.drop("tfidf", "abstract").checkpoint()
@@ -85,6 +91,10 @@ def main(sample: float = 0.0, write_es: bool = True) -> dict:
         "ponderations": analytics.WEIGHTS,
         "score_stats": scored.select(*[F.round(f(F.col("impact_score")), 2).alias(n) for n, f in
                                        [("min", F.min), ("moyenne", F.avg), ("max", F.max)]]).first().asDict(),
+        "graphe": graph_report,
+        "top_pagerank": rows(scored.orderBy(F.desc("pagerank")).select(
+            "arxiv_id", "title", "primary_category", "cited_by_count", "citations_graphe", "pagerank",
+            "impact_score")),
         "top_score": rows(scored.orderBy(F.desc("impact_score")).select(
             "arxiv_id", "title", "primary_category", "cited_by_count", "hn_score_total",
             "published_year", "mots_cles", "impact_score")),

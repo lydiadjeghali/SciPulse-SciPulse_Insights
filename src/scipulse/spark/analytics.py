@@ -8,7 +8,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import ArrayType, StringType
 
 # Pondérations du score d'impact
-WEIGHTS = {"citations": 0.40, "velocite": 0.20, "hn": 0.25, "recence": 0.15}
+WEIGHTS = {"citations": 0.35, "pagerank": 0.10, "velocite": 0.15, "hn": 0.25, "recence": 0.15}
 RECENCY_TAU_YEARS = 3.0          
 VELOCITY_YEARS = 2               # vélocité = citations des 2 dernières années complètes
 
@@ -82,15 +82,17 @@ def tfidf(df: DataFrame, vocab_size: int = 50_000, min_df: int = 5, top_k: int =
 
 # ------------------------------------------------------------- score d'impact
 def impact_score(df: DataFrame, reference_date: str) -> DataFrame:
-    """Score composite sur 100 = 0,40·C + 0,20·V + 0,25·H + 0,15·R (chaque composante entre 0 et 1).
+    """Score composite sur 100 = 0,35·C + 0,10·P + 0,15·V + 0,25·H + 0,15·R (chaque composante entre 0 et 1).
 
     C : rang percentile des citations dans sa cohorte (même domaine, même année)
+    P : rang percentile du PageRank (graphe de citations) dans son domaine
     V : rang percentile de la vélocité de citation dans son domaine
     H : signal Hacker News en échelle logarithmique, 0 si l'article n'est jamais passé sur HN
     R : récence
     """
     cohort = Window.partitionBy("primary_domain", "published_year").orderBy("cited_by_count")
     domain = Window.partitionBy("primary_domain").orderBy("velocite_citations")
+    domain_pagerank = Window.partitionBy("primary_domain").orderBy("pagerank")
     hn_log = F.log1p(F.coalesce(F.col("hn_score_total"), F.lit(0)) + F.coalesce(F.col("hn_comments_total"), F.lit(0)))
     age_years = F.datediff(F.to_date(F.lit(reference_date)), F.col("submitted_date")) / F.lit(365.25)
 
@@ -98,11 +100,13 @@ def impact_score(df: DataFrame, reference_date: str) -> DataFrame:
     hn_log_max = df.agg(F.max("hn_log")).first()[0] or 1.0      # calculé une seule fois
     scored = (
         df.withColumn("score_citations", F.percent_rank().over(cohort))
+        .withColumn("score_pagerank", F.percent_rank().over(domain_pagerank))
         .withColumn("score_velocite", F.percent_rank().over(domain))
         .withColumn("score_hn", F.col("hn_log") / F.lit(hn_log_max))
         .withColumn("score_recence", F.exp(-F.greatest(age_years, F.lit(0)) / F.lit(RECENCY_TAU_YEARS)))
     )
     total = (F.lit(WEIGHTS["citations"]) * F.col("score_citations")
+             + F.lit(WEIGHTS["pagerank"]) * F.col("score_pagerank")
              + F.lit(WEIGHTS["velocite"]) * F.col("score_velocite")
              + F.lit(WEIGHTS["hn"]) * F.col("score_hn")
              + F.lit(WEIGHTS["recence"]) * F.col("score_recence"))

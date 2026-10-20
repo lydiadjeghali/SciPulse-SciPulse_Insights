@@ -356,6 +356,16 @@ def insights_objects():
             "gc": metric("max", "croissance_citations_categorie", "Croissance citations", PERCENT),
         }, "croissance_publications_categorie > 0 and croissance_citations_categorie > 0 "
            "and publications_categorie >= 500"),
+        # Option B : graphe de citations
+        "pagerank": article_table("ins-pagerank", "Articles les plus influents dans le graphe de citations (PageRank)", dv, [
+            metric("max", "pagerank", "PageRank", {"id": "number", "params": {"decimals": 2}}),
+            metric("max", "citations_graphe", "Citations dans le graphe", NUMBER),
+            metric("max", "cited_by_count", "Citations (total)", NUMBER),
+            metric("max", "impact_score", "Score d'impact", DECIMAL)]),
+        "communities": xy_vis("ins-communities", "Communautés du graphe : répartition par catégorie ArXiv (12 plus grandes)", dv,
+                              terms_by_count("communaute", "Communauté", 12), count("Articles"), "bar_stacked",
+                              terms("primary_category", "Catégorie", 6, "y", other=True),
+                              "citations_graphe > 0"),
     }
     controls = options_controls(dv, [("primary_domain", "Domaine"), ("primary_category", "Catégorie"),
                                      ("on_hn", "Passé sur HN")])
@@ -370,7 +380,8 @@ def insights_objects():
          (v["velocity"], 32, 22, 16, 14),
          (v["cited_not_hn"], 0, 36, 48, 15),
          (v["viral_low_cited"], 0, 51, 48, 15),
-         (v["growth"], 0, 66, 48, 15)],
+         (v["growth"], 0, 66, 48, 15),
+         (v["pagerank"], 0, 81, 48, 15), (v["communities"], 0, 96, 48, 16)],
         "1986-01-01T00:00:00.000Z", "now", controls=controls)
     return list(v.values()) + [board]
 
